@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nodus_db
+    environment:
+      POSTGRES_USER: nodus
+      POSTGRES_PASSWORD: nodus2026
+      POSTGRES_DB: nodus_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - nodus_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nodus']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nodus_redis
+    ports:
+      - '6379:6379'
+
+volumes:
+  nodus_pgdata:

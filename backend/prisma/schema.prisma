@@ -1,0 +1,550 @@
+// NODUS Prisma Schema MVP v1.0
+// 911MiPyme Plataforma SaaS de Orquestacion Empresarial
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADVISORY
+  CONSULTOR
+  MIPYME
+  CONSULTOR_REVISOR
+}
+
+enum UserStatus {
+  ACTIVO
+  INACTIVO
+  PENDIENTE
+}
+
+enum Urgency {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum Impact {
+  CRITICO
+  ALTO
+  MEDIO
+  BAJO
+}
+
+enum Complexity {
+  ESTRATEGICO
+  ALTO
+  MEDIO
+  BAJO
+}
+
+enum ConsultorLevel {
+  EXPERTO
+  SENIOR
+  JUNIOR
+}
+
+enum Availability {
+  DISPONIBLE
+  OCUPADO
+  INACTIVO
+}
+
+enum CaseStatus {
+  CREADO
+  EN_REVISION
+  CLASIFICADO
+  EN_POSTULACION
+  ASIGNADO
+  PROPUESTA_EN_DISENO
+  PROPUESTA_LISTA_QA
+  PROPUESTA_ENVIADA
+  EN_DECISION
+  AJUSTES
+  PROPUESTA_ACEPTADA
+  PENDIENTE_CONTRATACION
+  AUTORIZADO_EJECUCION
+  EN_EJECUCION
+  CERRADO
+  CERRADO_SIN_CONTRATACION
+}
+
+enum ApplicationStatus {
+  PENDIENTE
+  EVALUADA
+  ASIGNADA
+  RECHAZADA
+}
+
+enum ProposalStatus {
+  BORRADOR
+  EN_REVISION
+  LISTA_QA
+  ENVIADA
+  ACEPTADA
+  AJUSTES
+  RECHAZADA
+}
+
+enum ActivityStatus {
+  NO_INICIADA
+  EN_CURSO
+  COMPLETADA
+  BLOQUEADA
+  REPROGRAMADA
+}
+
+enum MilestoneStatus {
+  PENDIENTE
+  CUMPLIDO
+  VENCIDO
+  REPROGRAMADO
+}
+
+enum DeliverableStatus {
+  PENDIENTE
+  EN_DESARROLLO
+  CARGADO
+  EN_REVISION_D
+  AJUSTADO
+  LISTO_CIERRE
+}
+
+enum NotifChannel {
+  EMAIL
+  WHATSAPP
+  IN_APP
+}
+
+enum NotifStatus {
+  ENVIADO
+  FALLIDO
+  LEIDO
+}
+
+enum EvalType {
+  SATISFACCION_CLIENTE
+  DESEMPENO_CONSULTOR
+}
+
+enum MeetingType {
+  PRESENTACION_PROPUESTA
+  CIERRE
+}
+
+enum DocStage {
+  ONBOARDING
+  EVALUACION
+  BOLSA
+  PROPUESTA
+  DECISION
+  CONTRATACION
+  EJECUCION
+  CIERRE
+}
+
+// ─── MODELS ───────────────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  emailDomain String?  @unique @map("email_domain")
+  nit         String?  @unique
+  country     String   @default("Colombia")
+  city        String?
+  sector      String?
+  status      String   @default("activa")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users     User[]
+  cases     Case[]
+  auditLogs AuditLog[]
+  @@map("companies")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  name      String
+  email     String     @unique
+  phone     String?
+  password  String
+  role      Role
+  status    UserStatus @default(ACTIVO)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  companyId String?    @map("company_id")
+  company   Company?   @relation(fields: [companyId], references: [id])
+
+  consultant        Consultant?
+  casesAsContact    Case[]          @relation("ContactUser")
+  applications      Application[]
+  activities        Activity[]      @relation("ActivityResp")
+  milestones        Milestone[]     @relation("MilestoneResp")
+  deliverables      Deliverable[]   @relation("DeliverableResp")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  slaAlerts         SlaAlert[]      @relation("EscalatedTo")
+  documents         Document[]
+  @@map("users")
+}
+
+model Consultant {
+  id              String         @id @default(uuid())
+  specialties     String[]
+  level           ConsultorLevel
+  maxComplexity   Complexity     @map("max_complexity")
+  availability    Availability   @default(DISPONIBLE)
+  reputationScore Decimal?       @map("reputation_score")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  userId       String       @unique @map("user_id")
+  user         User         @relation(fields: [userId], references: [id])
+  cases        Case[]       @relation("AssignedConsultor")
+  applications Application[]
+  proposals    Proposal[]
+  @@map("consultants")
+}
+
+model Case {
+  id               String      @id @default(uuid())
+  caseCode         String      @unique @map("case_code")
+  title            String
+  description      String
+  area             String
+  urgency          Urgency
+  impact           Impact
+  complexity       Complexity?
+  interventionType String?     @map("intervention_type")
+  classification   String?
+  status           CaseStatus  @default(CREADO)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  companyId    String      @map("company_id")
+  company      Company     @relation(fields: [companyId], references: [id])
+  contactId    String      @map("contact_id")
+  contact      User        @relation("ContactUser", fields: [contactId], references: [id])
+  consultantId String?     @map("consultant_id")
+  consultant   Consultant? @relation("AssignedConsultor", fields: [consultantId], references: [id])
+
+  applications         Application[]
+  proposals            Proposal[]
+  documents            Document[]
+  auditLogs            AuditLog[]
+  slaAlerts            SlaAlert[]
+  notifications        Notification[]
+  clientDecisions      ClientDecision[]
+  contractingItems     ContractingItem[]
+  operationalFramework OperationalFramework?
+  executionAgendas     ExecutionAgenda[]
+  incidents            Incident[]
+  deliverables         Deliverable[]
+  evaluations          Evaluation[]
+  meetings             Meeting[]
+  @@map("cases")
+}
+
+model Application {
+  id                    String            @id @default(uuid())
+  interestStatement     String            @map("interest_statement")
+  relevantExperience    String            @map("relevant_experience")
+  availabilityConfirmed Boolean           @map("availability_confirmed")
+  evaluationNotes       String?           @map("evaluation_notes")
+  evaluationScore       Int?              @map("evaluation_score")
+  status                ApplicationStatus @default(PENDIENTE)
+  createdAt             DateTime          @default(now()) @map("created_at")
+
+  caseId       String     @map("case_id")
+  case         Case       @relation(fields: [caseId], references: [id])
+  consultantId String     @map("consultant_id")
+  consultant   Consultant @relation(fields: [consultantId], references: [id])
+  userId       String     @map("user_id")
+  user         User       @relation(fields: [userId], references: [id])
+  @@map("applications")
+}
+
+model Proposal {
+  id                    String         @id @default(uuid())
+  version               Int            @default(1)
+  executiveSummary      String         @map("executive_summary")
+  objective             String
+  scope                 String
+  exclusions            String?
+  activities            Json
+  deliverables          Json
+  timeline              Json
+  effortValuation       Json?          @map("effort_valuation")
+  conditionsAssumptions String?        @map("conditions_assumptions")
+  methodologicalReview  Json?          @map("methodological_review")
+  peerReviewNotes       String?        @map("peer_review_notes")
+  status                ProposalStatus @default(BORRADOR)
+  createdAt             DateTime       @default(now()) @map("created_at")
+
+  caseId       String       @map("case_id")
+  case         Case         @relation(fields: [caseId], references: [id])
+  consultantId String       @map("consultant_id")
+  consultant   Consultant   @relation(fields: [consultantId], references: [id])
+  attachments  ProposalAttachment[]
+  @@map("proposals")
+}
+
+model ProposalAttachment {
+  id           String   @id @default(uuid())
+  templateCode String   @map("template_code")
+  filePath     String   @map("file_path")
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  proposalId String   @map("proposal_id")
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  @@map("proposal_attachments")
+}
+
+model ClientDecision {
+  id                 String   @id @default(uuid())
+  decision           String
+  adjustmentRequest  String?  @map("adjustment_request")
+  consultantResponse String?  @map("consultant_response")
+  formalAcceptance   Json?    @map("formal_acceptance")
+  closureReason      String?  @map("closure_reason")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  caseId     String @map("case_id")
+  case       Case   @relation(fields: [caseId], references: [id])
+  proposalId String @map("proposal_id")
+  @@map("client_decisions")
+}
+
+model ContractingItem {
+  id             String    @id @default(uuid())
+  activity       String
+  responsible    String
+  targetDate     DateTime  @map("target_date")
+  completionDate DateTime? @map("completion_date")
+  evidencePath   String?   @map("evidence_path")
+  status         String    @default("pendiente")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  caseId String @map("case_id")
+  case   Case   @relation(fields: [caseId], references: [id])
+  @@map("contracting_items")
+}
+
+model OperationalFramework {
+  id                    String   @id @default(uuid())
+  operatingConditions   String   @map("operating_conditions")
+  estimatedDuration     String   @map("estimated_duration")
+  mainMilestones        Json     @map("main_milestones")
+  baseSchedule          Json     @map("base_schedule")
+  committedDeliverables Json     @map("committed_deliverables")
+  clientDependencies    String?  @map("client_dependencies")
+  assumptions           String?
+  executionConstraints  String?  @map("execution_constraints")
+  primaryContactId      String?  @map("primary_contact_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  caseId String @unique @map("case_id")
+  case   Case   @relation(fields: [caseId], references: [id])
+  @@map("operational_frameworks")
+}
+
+model ExecutionAgenda {
+  id        String   @id @default(uuid())
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  caseId     String      @map("case_id")
+  case       Case        @relation(fields: [caseId], references: [id])
+  activities Activity[]
+  milestones Milestone[]
+  @@map("execution_agendas")
+}
+
+model Activity {
+  id           String         @id @default(uuid())
+  name         String
+  description  String
+  targetDate   DateTime       @map("target_date")
+  status       ActivityStatus @default(NO_INICIADA)
+  evidencePath String?        @map("evidence_path")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  agendaId      String          @map("agenda_id")
+  agenda        ExecutionAgenda @relation(fields: [agendaId], references: [id])
+  responsibleId String          @map("responsible_id")
+  responsible   User            @relation("ActivityResp", fields: [responsibleId], references: [id])
+  @@map("activities")
+}
+
+model Milestone {
+  id                  String          @id @default(uuid())
+  name                String
+  targetDate          DateTime        @map("target_date")
+  expectedDeliverable String          @map("expected_deliverable")
+  criticality         String
+  status              MilestoneStatus @default(PENDIENTE)
+  createdAt           DateTime        @default(now()) @map("created_at")
+
+  agendaId      String          @map("agenda_id")
+  agenda        ExecutionAgenda @relation(fields: [agendaId], references: [id])
+  responsibleId String          @map("responsible_id")
+  responsible   User            @relation("MilestoneResp", fields: [responsibleId], references: [id])
+  @@map("milestones")
+}
+
+model Incident {
+  id              String   @id @default(uuid())
+  type            String
+  impact          String
+  suggestedAction String   @map("suggested_action")
+  status          String   @default("abierta")
+  decision        String?
+  reportedBy      String   @map("reported_by")
+  reportedAt      DateTime @default(now()) @map("reported_at")
+
+  caseId String @map("case_id")
+  case   Case   @relation(fields: [caseId], references: [id])
+  @@map("incidents")
+}
+
+model Deliverable {
+  id          String            @id @default(uuid())
+  name        String
+  description String
+  targetDate  DateTime          @map("target_date")
+  status      DeliverableStatus @default(PENDIENTE)
+  version     Int               @default(1)
+  filePath    String?           @map("file_path")
+  isFinal     Boolean           @default(false) @map("is_final")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  caseId        String @map("case_id")
+  case          Case   @relation(fields: [caseId], references: [id])
+  responsibleId String @map("responsible_id")
+  responsible   User   @relation("DeliverableResp", fields: [responsibleId], references: [id])
+  @@map("deliverables")
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  stage     DocStage
+  type      String
+  path      String
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  caseId       String @map("case_id")
+  case         Case   @relation(fields: [caseId], references: [id])
+  uploadedById String @map("uploaded_by_id")
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+  @@map("documents")
+}
+
+// Append-only — no updates, no deletes at application level
+model AuditLog {
+  id            String   @id @default(uuid())
+  action        String
+  entity        String
+  previousState String?  @map("previous_state")
+  newState      String?  @map("new_state")
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  caseId    String?  @map("case_id")
+  case      Case?    @relation(fields: [caseId], references: [id])
+  companyId String?  @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id])
+  actorId   String   @map("actor_id")
+  actor     User     @relation(fields: [actorId], references: [id])
+  @@map("audit_logs")
+}
+
+model SlaRule {
+  id              String     @id @default(uuid())
+  module          String
+  hours           Int
+  preventivePct   Int        @default(75) @map("preventive_pct")
+  criticalPct     Int        @default(90) @map("critical_pct")
+  escalationLevel String     @map("escalation_level")
+  active          Boolean    @default(true)
+  alerts          SlaAlert[]
+  @@map("sla_rules")
+}
+
+model SlaAlert {
+  id          String    @id @default(uuid())
+  level       String    // preventiva | critica | escalada
+  triggeredAt DateTime  @default(now()) @map("triggered_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  caseId        String   @map("case_id")
+  case          Case     @relation(fields: [caseId], references: [id])
+  slaRuleId     String   @map("sla_rule_id")
+  slaRule       SlaRule  @relation(fields: [slaRuleId], references: [id])
+  escalatedToId String?  @map("escalated_to_id")
+  escalatedTo   User?    @relation("EscalatedTo", fields: [escalatedToId], references: [id])
+  @@map("sla_alerts")
+}
+
+model Notification {
+  id           String        @id @default(uuid())
+  templateCode String        @map("template_code")
+  channel      NotifChannel
+  status       NotifStatus   @default(ENVIADO)
+  payload      Json?
+  sentAt       DateTime      @default(now()) @map("sent_at")
+
+  caseId      String? @map("case_id")
+  case        Case?   @relation(fields: [caseId], references: [id])
+  recipientId String  @map("recipient_id")
+  recipient   User    @relation(fields: [recipientId], references: [id])
+  @@map("notifications")
+}
+
+model Evaluation {
+  id        String   @id @default(uuid())
+  type      EvalType
+  targetId  String   @map("target_id")
+  scores    Json
+  comments  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  caseId String @map("case_id")
+  case   Case   @relation(fields: [caseId], references: [id])
+  @@map("evaluations")
+}
+
+model Meeting {
+  id          String      @id @default(uuid())
+  type        MeetingType
+  scheduledAt DateTime    @map("scheduled_at")
+  participants Json
+  summary     String?
+  meetingLink String?     @map("meeting_link")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  caseId String @map("case_id")
+  case   Case   @relation(fields: [caseId], references: [id])
+  @@map("meetings")
+}
+
+model LovItem {
+  id       String  @id @default(uuid())
+  category String
+  value    String
+  label    String
+  active   Boolean @default(true)
+  order    Int     @default(0)
+
+  @@unique([category, value])
+  @@map("lov_items")
+}
